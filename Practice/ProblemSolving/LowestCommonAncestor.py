@@ -68,6 +68,8 @@ with open('LowestCommonAncestor_1.txt') as file:
     arr = list(map(int, next(file).split()))
     v = list(map(int, next(file).split()))
 
+print (arr)
+
 for i in range(t):
     tree.create(arr[i])
 
