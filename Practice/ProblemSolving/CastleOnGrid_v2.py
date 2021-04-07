@@ -3,6 +3,8 @@
 import os
 from collections import deque
 import time
+from heapq import heappop, heappush
+
 
 clear = lambda: os.system('clear')
 
@@ -112,25 +114,44 @@ class Mapa:
 
 
 
-def vecinos_trasitables(mapa, nodo, closed):
+def vecinos_trasitables(mapa, curr_pos, inicio):
 
-        # Anadir el tipo de movimiento que se produce (der, izq, baja, sub) para contabilizar los giros
-        vecinos = []
-        to_check = [
-            mapa.mapa[nodo.posicion[1]+2][nodo.posicion[0]+1],
-            mapa.mapa[nodo.posicion[1]][nodo.posicion[0]+1], 
-            mapa.mapa[nodo.posicion[1]+1][nodo.posicion[0]+2], 
-            mapa.mapa[nodo.posicion[1]+1][nodo.posicion[0]]
-        ]
-        j = 0
-        for i in to_check:
-            if (i!=None) :
-                i.direccion = j
-                if not(i in closed):
-                    vecinos.append(i)
-            j=j+1
 
-        return vecinos
+    # Anadir el tipo de movimiento que se produce (der, izq, baja, sub) para contabilizar los giros
+    vecinos = []
+    to_check = [
+        mapa.mapa[curr_pos.posicion[1]+2][curr_pos.posicion[0]+1],
+        mapa.mapa[curr_pos.posicion[1]][curr_pos.posicion[0]+1], 
+        mapa.mapa[curr_pos.posicion[1]+1][curr_pos.posicion[0]+2], 
+        mapa.mapa[curr_pos.posicion[1]+1][curr_pos.posicion[0]]
+    ]
+
+    #movimiento anterior
+    if curr_pos != inicio:
+        is_turn = False
+        if curr_pos.posicion[1] != curr_pos.padre.posicion[1] and curr_pos.posicion[0] == curr_pos.padre.posicion[0]:
+            prev_mov = 'horizontal'
+        else:
+            prev_mov = 'vertical'
+
+    for i in to_check:
+            
+        if (i!=None):
+            if curr_pos == inicio:
+                is_turn = False
+            else:
+                #movimiento actual
+                if curr_pos.posicion[1] != i.posicion[1] and curr_pos.posicion[0] == i.posicion[0]:
+                    sig_mov = 'vertical'
+                else:
+                    sig_mov = 'horizontal'
+                    
+                # If we're not still moving in the same direction, we have turned.
+                is_turn = not (prev_mov == sig_mov)
+
+            vecinos.append((i, is_turn))
+
+    return vecinos
  
 def imprime_coord_camino(padre):
     if padre != None:
@@ -205,67 +226,89 @@ def menor_f(open):
             menor_index = i
     return menor_index
     
+def make_path(curr_pos: tuple, route: dict, nodo_final) -> tuple:
+        """Creates list of coordinates representing turns in path.
+
+        :param curr_pos: end point of path.
+        :param route: dict of coordinates leading to curr_pos
+        :return: tuple containing list of coordinates of turns, len(list of coordinates)
+        """
+        turn_coords = []
+        x, path_length = 0, 1
+        prev_pos = curr_pos
+
+        if route.get(nodo_final) is None:
+            return 'No path found.', []
+
+        while route[curr_pos] is not None:
+            curr_pos = route[curr_pos][1]
+
+            if curr_pos[x] != prev_pos[x]:
+                if x == 0:
+                    x = 1
+                else:
+                    x = 0
+
+                if prev_pos is not nodo_final:
+                    turn_coords.append(prev_pos)
+
+            prev_pos = curr_pos
+            path_length += 1
+
+        turn_coords.reverse()
+        return len(turn_coords), path_length
 
 # Complete the minimumMoves function below.
 def minimumMoves(grid, startX, startY, goalX, goalY):
-    open = []
-    closed = []
-    mapa = Mapa(grid,[startX, startY],[goalX, goalY])
-    #mapa.imprime_mapa_h()
-    mapa.imprimie_extremos()
-    #mapa.imprime_coordenadas()
-    open.insert(0,mapa.inicio) #Añade el cuadro inicial a la lista abierta.
-    camino = False
 
-    while (open)and(not(camino)):
-        
-        #Busca el cuadro con el coste F más bajo en la lista abierta.
-        actual_index = menor_f(open)
-        actual = open.pop(actual_index)
-        #actual = open.pop(0)
-        #time.sleep(0.5)
-        clear()
-        mapa.introduce_camino(actual)
-        mapa.imprime_mapa_recorrido()
-        mapa.reinicar_camino()
+        # Keep track of where we've been.
+        visited = set()
+        mapa = Mapa(grid,[startX, startY],[goalX, goalY])
+        # We'll keep track of the route and the number of turns to reach the curr_pos with a dict.
+        # {(position): (turns_count, (previous-position))}
+        route = {mapa.inicio: None}
 
-        #Cámbialo a la lista cerrada.
-        closed.append(actual.padre)
+        # turn_count is used to promote routes with fewer turns.
+        turn_count = {mapa.inicio: 0}
 
-        #Si no es transitable o si está en la lista cerrada, ignóralo.
-        vecinos = vecinos_trasitables(mapa, actual, closed)
+        open_pos = []
+        heappush(open_pos, (0, mapa.inicio))
 
-        for i in vecinos:
-            if i == mapa.final:
-                camino = True
-                i.padre = actual
-                i.update()
-                break
-            
-            if not(i in open):
-                i.padre = actual
-                i.update()
-                open.append(i)
-                
-            elif (i.f) > (actual.f):
-                i.padre = actual
-                i.update()
-        
-    if camino:
-        print("Coordenadas camino: ")
-        imprime_coord_camino(mapa.final)
-        mapa.imprimie_extremos()
-        mapa.introduce_camino(mapa.final)
-        print()
-        mapa.imprime_mapa_recorrido()
-        set_vertices(mapa.final, mapa.inicio)
-        print_path_vertices(mapa.final)
-        path = get_path_vertices(mapa.final)
-        print("giros acumulados: ", mapa.final.giros)
-        #return mapa.final.giros
-        return len(path)
+        while open_pos:
+            # Routes with fewest turns_so_far are up first in the priority queue.
+            turns_so_far, curr_pos = heappop(open_pos)
 
-    return 0
+            if curr_pos in visited:
+                continue
+
+            #prev = route[curr_pos]  # Always remember where you came from so we know if we've turned.
+            visited.add(curr_pos)  # But keep moving forward. Never go back!
+
+            neighbors_list = vecinos_trasitables(mapa, curr_pos, mapa.inicio)
+            for pos, did_turn in neighbors_list:
+                if pos in visited:
+                    continue
+
+                if turn_count.get(pos):  # Have we been here before?
+                    # If so, lets update our turn_count with the route containing the fewest turns.
+                    turn_count[pos] = min(turn_count[pos], turns_so_far + int(did_turn))
+                else:
+                    turn_count[pos] = turns_so_far + int(did_turn)
+
+                # In any case add this place to the list of places to explore.
+                heappush(open_pos, (turn_count[pos], pos))
+
+                old_route = route.get(pos)  # Do we know of another way to get here?
+                # If so, does the old_route take more turns than the current route to get to pos?
+                if old_route and turn_count[pos] < old_route[0]:
+                    # If pos can be reached in fewer turns by the current route, we overwrite the old route.
+                    route[pos] = (turn_count[pos], curr_pos)
+                if not old_route:
+                    route[pos] = (turn_count[pos], curr_pos)
+
+        # Wait until open_pos is exhausted to ensure a shorter path doesn't end our search prematurely.
+        print (mapa.make_path(mapa.end_pos, route))
+        return mapa.make_path(mapa.end_pos, route)
 
 
 if __name__ == '__main__':
