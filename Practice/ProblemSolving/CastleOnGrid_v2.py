@@ -1,5 +1,7 @@
 # https://www.hackerrank.com/challenges/castle-on-the-grid/problem?h_r=next-challenge&h_v=zen
 
+# Referencias:
+# https://codereview.stackexchange.com/questions/208311/python-a-star-with-fewest-turns-and-shortest-path-variations
 import os
 from collections import deque
 import time
@@ -10,18 +12,34 @@ clear = lambda: os.system('clear')
 
 class Nodo:
     
-    direccion = -1
-    en_path = False
+    posicion = [0, 0]
     giros = 0
-    h = 0
-    longitud = 0
     padre = None
-    vertice_anterior = None
-    
+    en_recorrido = False
+
+    # Inicialización
     def __init__(self, posicion=[0, 0], final=[0,0]):
         self.posicion = posicion
-        self.h = self.distancia(final)
+    
+    def update(self):
+        self.giros = self.padre.giros
 
+    # Comparadores
+    def __lt__(self, other): #<
+        return self.giros < other.giros
+
+    def __eq__(self, other): # =
+        if(other == None):
+            return False
+        if(not isinstance(other, Nodo)):
+            return False
+        return self.giros == other.giros
+
+    # Para que funcione la busqueda en set
+    def __hash__(self):
+        return hash((self.posicion[0], self.posicion[1]))
+
+    '''
     def update(self):
         self.f = self.h + self.giros
         if self.padre != None:
@@ -35,7 +53,7 @@ class Nodo:
     
     def distancia(self, b):
         return abs(self.posicion[0] - b[0]) + abs(self.posicion[1] - b[1])
-
+    '''
 class Mapa:
     mapa = []
     inicio = None
@@ -62,30 +80,23 @@ class Mapa:
         for y in range(len(self.mapa)):
             for x in range(len(self.mapa[y])):
                 if self.mapa[y][x] != None:
-                    self.mapa[y][x].en_path = False
-
-    def imprime_mapa_h(self):
-        for y in range(len(self.mapa)):
-            for x in range(len(self.mapa[y])):
-                if self.mapa[y][x] == None:
-                    print(end="# ")
-                else:
-                    print(self.mapa[y][x].h, end=" ")
-            print()
+                    self.mapa[y][x].en_recorrido = False
     
     def imprime_mapa_recorrido(self):
         for y in range(len(self.mapa)):
             for x in range(len(self.mapa[y])):
-                if self.mapa[y][x] == self.inicio:
-                    print(end="I")
-                elif self.mapa[y][x] == self.final:
-                    print(end="F")
-                elif self.mapa[y][x] == None:
-                    print(end="#")
-                elif self.mapa[y][x].en_path:
-                    print(end=".")
+                if self.mapa[y][x] == None:
+                        print(end="#")
                 else:
-                    print(end=" ")
+                    if self.mapa[y][x].posicion == self.inicio.posicion:
+                        print(end="I")
+                    elif self.mapa[y][x].posicion == self.final.posicion:
+                        print(end="F")
+                   
+                    elif self.mapa[y][x].en_recorrido:
+                        print(end=".")
+                    else:
+                        print(end=" ")
             print()
     
     def imprimie_extremos(self):
@@ -109,7 +120,7 @@ class Mapa:
         while True:
             if final.padre == None:
                 break
-            final.en_path = True
+            final.en_recorrido = True
             final = final.padre
 
 
@@ -126,31 +137,32 @@ def vecinos_trasitables(mapa, curr_pos, inicio):
         mapa.mapa[curr_pos.posicion[1]+1][curr_pos.posicion[0]]
     ]
 
-    #movimiento anterior
-    if curr_pos != inicio:
-        is_turn = False
-        if curr_pos.posicion[1] != curr_pos.padre.posicion[1] and curr_pos.posicion[0] == curr_pos.padre.posicion[0]:
-            prev_mov = 'horizontal'
-        else:
-            prev_mov = 'vertical'
-
+ 
     for i in to_check:
-            
         if (i!=None):
-            if curr_pos == inicio:
+            # para no contar el primer paso como giro
+            if curr_pos.posicion == inicio.posicion:
                 is_turn = False
-            else:
+            else:   
+                
+                # movimiento anterior
+                if curr_pos.posicion[1] != curr_pos.padre.posicion[1] and curr_pos. posicion[0] == curr_pos.padre.posicion[0]:
+                    prev_mov = 'vertical'
+                else:
+                    prev_mov = 'horizontal'
+                
                 #movimiento actual
                 if curr_pos.posicion[1] != i.posicion[1] and curr_pos.posicion[0] == i.posicion[0]:
                     sig_mov = 'vertical'
                 else:
-                    sig_mov = 'horizontal'
-                    
+                    sig_mov = 'horizontal'         
+                
                 # If we're not still moving in the same direction, we have turned.
                 is_turn = not (prev_mov == sig_mov)
 
             vecinos.append((i, is_turn))
-
+            # i:        Nodo vecino
+            # is_turn:  Si se ha producido algun grio
     return vecinos
  
 def imprime_coord_camino(padre):
@@ -226,95 +238,131 @@ def menor_f(open):
             menor_index = i
     return menor_index
     
-def make_path(curr_pos: tuple, route: dict, nodo_final) -> tuple:
+def make_path(mapa: Mapa):
         """Creates list of coordinates representing turns in path.
 
         :param curr_pos: end point of path.
         :param route: dict of coordinates leading to curr_pos
         :return: tuple containing list of coordinates of turns, len(list of coordinates)
         """
-        turn_coords = []
+        curvas = []
         x, path_length = 0, 1
-        prev_pos = curr_pos
 
-        if route.get(nodo_final) is None:
-            return 'No path found.', []
+        if mapa.final is None:
+            print('No hay camino posible')
+            return 0
 
-        while route[curr_pos] is not None:
-            curr_pos = route[curr_pos][1]
+        pos_actual = mapa.final
 
-            if curr_pos[x] != prev_pos[x]:
+        while True:
+            if  (pos_actual == None) or (pos_actual.padre == None):
+                break
+            if pos_actual.posicion[x] != pos_actual.padre.posicion[x]:
                 if x == 0:
                     x = 1
                 else:
                     x = 0
-
-                if prev_pos is not nodo_final:
-                    turn_coords.append(prev_pos)
-
-            prev_pos = curr_pos
+                if pos_actual.posicion != mapa.final.posicion:
+                    curvas.append(pos_actual)
+                
+            pos_actual = pos_actual.padre
             path_length += 1
 
-        turn_coords.reverse()
-        return len(turn_coords), path_length
+        print("\n\nVertices: ")
+        for i in curvas:
+            print(i.posicion, end = " ")
+        print("\n")
+        return [curvas, path_length]
 
 # Complete the minimumMoves function below.
-def minimumMoves(grid, startX, startY, goalX, goalY):
+def iterar(grid, startX, startY, goalX, goalY):
 
         # Keep track of where we've been.
         visited = set()
         mapa = Mapa(grid,[startX, startY],[goalX, goalY])
         # We'll keep track of the route and the number of turns to reach the curr_pos with a dict.
         # {(position): (turns_count, (previous-position))}
-        route = {mapa.inicio: None}
+        #rutas = {mapa.inicio: None}
 
         # turn_count is used to promote routes with fewer turns.
-        turn_count = {mapa.inicio: 0}
-
+        # turn_count = {mapa.inicio: 0} # Diccionario: indice es el nodo
+                                      # valor el número de giros
         open_pos = []
-        heappush(open_pos, (0, mapa.inicio))
-
-        while open_pos:
-            # Routes with fewest turns_so_far are up first in the priority queue.
-            turns_so_far, curr_pos = heappop(open_pos)
-
-            if curr_pos in visited:
-                continue
+        heappush(open_pos, (mapa.inicio.giros, mapa.inicio))
+        terminar = False
+        giros_acumulados = 0
+        while (len(open_pos)>0) and not(terminar):
+            
+            # priority queue: Los nodos con menos giros acumulados están al inicio
+            giros_acumulados, pos_actual = heappop(open_pos)
+            
+            #if pos_actual in visited:
+            #    continue
+            time.sleep(0.5)
+            clear()
+            mapa.introduce_camino(pos_actual)
+            mapa.imprime_mapa_recorrido()
+            mapa.reinicar_camino()
+            print(giros_acumulados, pos_actual.posicion)
 
             #prev = route[curr_pos]  # Always remember where you came from so we know if we've turned.
-            visited.add(curr_pos)  # But keep moving forward. Never go back!
+            visited.add(pos_actual)  # But keep moving forward. Never go back!
 
-            neighbors_list = vecinos_trasitables(mapa, curr_pos, mapa.inicio)
-            for pos, did_turn in neighbors_list:
-                if pos in visited:
+            neighbors_list = vecinos_trasitables(mapa, pos_actual, mapa.inicio)
+            for vecino, did_turn in neighbors_list:
+                if  vecino in visited:
                     continue
 
-                if turn_count.get(pos):  # Have we been here before?
-                    # If so, lets update our turn_count with the route containing the fewest turns.
-                    turn_count[pos] = min(turn_count[pos], turns_so_far + int(did_turn))
-                else:
-                    turn_count[pos] = turns_so_far + int(did_turn)
-
+                if vecino.padre!= None:
+                    # Si ya ha estado antes, se actualiza el numero de giros con los que contiene la ruta mas corta
+                    vecino.giros = min(vecino.padre.giros, giros_acumulados + int(did_turn))
+                #else:
+                    vecino.giros = giros_acumulados + int(did_turn)
+                #print(vecino.posicion, vecino.giros)
                 # In any case add this place to the list of places to explore.
-                heappush(open_pos, (turn_count[pos], pos))
+                heappush(open_pos, (vecino.giros, vecino))
 
-                old_route = route.get(pos)  # Do we know of another way to get here?
+                # Comprobar caminos más cortos
+                old_ruta = vecino.padre
                 # If so, does the old_route take more turns than the current route to get to pos?
-                if old_route and turn_count[pos] < old_route[0]:
-                    # If pos can be reached in fewer turns by the current route, we overwrite the old route.
-                    route[pos] = (turn_count[pos], curr_pos)
-                if not old_route:
-                    route[pos] = (turn_count[pos], curr_pos)
+                if old_ruta:
+                    if old_ruta.giros < vecino.padre.giros:
+                        # Si se alcanza en menos giros:
+                        vecino.padre = pos_actual
+                else:
+                    vecino.padre = pos_actual
+
+            for i in neighbors_list:
+                if i[0].posicion == mapa.final.posicion:
+                    terminar = True
 
         # Wait until open_pos is exhausted to ensure a shorter path doesn't end our search prematurely.
-        print (mapa.make_path(mapa.end_pos, route))
-        return mapa.make_path(mapa.end_pos, route)
+        print("\nGiros acumulados: ", giros_acumulados)
+        resultado = make_path(mapa)
+        print("Giros: \t\t", len(resultado[0]))
+        print("Movimientos: \t", len(resultado[0])+1)
+        print("Longitud: \t", resultado[1])
+
+        mapa.introduce_camino(pos_actual)
+        mapa.imprime_mapa_recorrido()
+        mapa.reinicar_camino()
+    
+        return len(resultado[0])+1
+
+# Complete the minimumMoves function below.
+def minimumMoves(grid, startX, startY, goalX, goalY):
+    
+    a_b = iterar(grid, startX, startY, goalX, goalY)
+    #time.sleep(1)
+    #b_a = iterar(grid, goalX, goalY, startX, startY)
+    #return min(a_b, b_a)
+    return 0
 
 
 if __name__ == '__main__':
     
     #fptr = open(os.environ['OUTPUT_PATH'], 'w')
-    with open('CastleOnGrid_test_case_1.txt') as file:
+    with open('CastleOnGrid_test_case_0.txt') as file:
     #with open('CastleOnGrid_test2.txt') as file:
 
     #n = int(input())
@@ -338,9 +386,11 @@ if __name__ == '__main__':
 
         goalY = int(startXStartY[3])
 
-        result = minimumMoves(grid, startY, startX, goalY, goalX)
+        result = minimumMoves(grid, startY, startX, goalY, goalX,)
 
-        print(result)
+        print("\nResultado: ")
+        print(" \t \t", end = " ")
+        print(result, "\n")
 
     #fptr.write(str(result) + '\n')
     #fptr.close()
