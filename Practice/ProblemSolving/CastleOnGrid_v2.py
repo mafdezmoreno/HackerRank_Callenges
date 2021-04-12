@@ -13,7 +13,7 @@ clear = lambda: os.system('clear')
 class Nodo:
     
     posicion = [0, 0]
-    giros = 0
+    giros = -1
     padre = None
     en_recorrido = False
 
@@ -146,7 +146,7 @@ def vecinos_trasitables(mapa, curr_pos, inicio):
             else:   
                 
                 # movimiento anterior
-                if curr_pos.posicion[1] != curr_pos.padre.posicion[1] and curr_pos. posicion[0] == curr_pos.padre.posicion[0]:
+                if curr_pos.posicion[1] != curr_pos.padre.posicion[1] and curr_pos.posicion[0] == curr_pos.padre.posicion[0]:
                     prev_mov = 'vertical'
                 else:
                     prev_mov = 'horizontal'
@@ -277,60 +277,33 @@ def make_path(mapa: Mapa):
 # Complete the minimumMoves function below.
 def iterar(grid, startX, startY, goalX, goalY):
 
-        # Keep track of where we've been.
         visited = set()
         mapa = Mapa(grid,[startX, startY],[goalX, goalY])
-        # We'll keep track of the route and the number of turns to reach the curr_pos with a dict.
-        # {(position): (turns_count, (previous-position))}
-        #rutas = {mapa.inicio: None}
-
-        # turn_count is used to promote routes with fewer turns.
-        # turn_count = {mapa.inicio: 0} # Diccionario: indice es el nodo
-                                      # valor el número de giros
         open_pos = []
-        heappush(open_pos, (mapa.inicio.giros, mapa.inicio))
+        heappush(open_pos,  mapa.inicio)
         terminar = False
-        giros_acumulados = 0
         while (len(open_pos)>0) and not(terminar):
             
-            # priority queue: Los nodos con menos giros acumulados están al inicio
-            giros_acumulados, pos_actual = heappop(open_pos)
-            
+            # nodos con menos giros acumulados están al inicio
+            pos_actual = heappop(open_pos)
+            print(pos_actual.giros)
             #if pos_actual in visited:
             #    continue
             time.sleep(0.5)
-            clear()
+            #clear()
             mapa.introduce_camino(pos_actual)
             mapa.imprime_mapa_recorrido()
             mapa.reinicar_camino()
-            print(giros_acumulados, pos_actual.posicion)
-
-            #prev = route[curr_pos]  # Always remember where you came from so we know if we've turned.
-            visited.add(pos_actual)  # But keep moving forward. Never go back!
+            print(pos_actual.posicion, pos_actual.giros)
+            visited.add(pos_actual) 
 
             neighbors_list = vecinos_trasitables(mapa, pos_actual, mapa.inicio)
             for vecino, did_turn in neighbors_list:
-                if  vecino in visited:
-                    continue
-
-                if vecino.padre!= None:
-                    # Si ya ha estado antes, se actualiza el numero de giros con los que contiene la ruta mas corta
-                    vecino.giros = min(vecino.padre.giros, giros_acumulados + int(did_turn))
-                #else:
-                    vecino.giros = giros_acumulados + int(did_turn)
-                #print(vecino.posicion, vecino.giros)
-                # In any case add this place to the list of places to explore.
-                heappush(open_pos, (vecino.giros, vecino))
-
-                # Comprobar caminos más cortos
-                old_ruta = vecino.padre
-                # If so, does the old_route take more turns than the current route to get to pos?
-                if old_ruta:
-                    if old_ruta.giros < vecino.padre.giros:
-                        # Si se alcanza en menos giros:
-                        vecino.padre = pos_actual
+                if vecino.padre.giros < pos_actual.giros:
+                    heappush(open_pos, vecino)
                 else:
                     vecino.padre = pos_actual
+                
 
             for i in neighbors_list:
                 if i[0].posicion == mapa.final.posicion:
@@ -362,7 +335,7 @@ def minimumMoves(grid, startX, startY, goalX, goalY):
 if __name__ == '__main__':
     
     #fptr = open(os.environ['OUTPUT_PATH'], 'w')
-    with open('CastleOnGrid_test_case_0.txt') as file:
+    with open('CastleOnGrid_test0.txt') as file:
     #with open('CastleOnGrid_test2.txt') as file:
 
     #n = int(input())
